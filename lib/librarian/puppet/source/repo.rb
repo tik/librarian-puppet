@@ -21,7 +21,15 @@ module Librarian
         end
 
         def version_unpacked_cache_path(version)
-          cache_path.join(version.to_s)
+          if environment.use_short_cache_path
+            # Take only the first 7 digits of the SHA1 checksum of the
+            # module name + version
+            # (short Git commit hash approach)
+            dir = Digest::SHA1.hexdigest("#{name}-#{version.to_s}")[0..6]
+            source.cache_path.join(dir)
+          else
+            cache_path.join(version.to_s)
+          end
         end
 
         def vendored?(name, version)
