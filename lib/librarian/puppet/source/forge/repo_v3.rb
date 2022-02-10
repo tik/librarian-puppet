@@ -55,6 +55,44 @@ module Librarian
             release
           end
 
+          def cache_version_unpacked!(version)
+            path = version_unpacked_cache_path(version)
+            return if path.directory?
+
+            path.mkpath
+
+            target = vendored?(name, version) ? vendored_path(name, version).to_s : name
+
+            # can't pass the default v3 forge url (http://forgeapi.puppetlabs.com)
+            # to clients that use the v1 API (https://forge.puppet.com)
+            # nor the other way around
+            module_repository = source.uri.to_s
+
+            if Forge.client_api_version() > 1 and module_repository =~ %r{^http(s)?://forge\.puppetlabs\.com}
+              module_repository = "https://forgeapi.puppetlabs.com"
+              warn { "Replacing Puppet Forge API URL to use v3 #{module_repository} as required by your client version #{Librarian::Puppet.puppet_version}" }
+            end
+
+            tar_dst = environment.tmp_path.join("#{target}-#{version}.tar.gz")
+            dest_dir = path.join(module_name(name)) 
+            tmp_dir = environment.tmp_path.join("forge").to_s
+
+            begin
+              release = get_release(version)
+              release.download(tar_dst)
+              release.verify(tar_dst)
+              PuppetForge::Unpacker.unpack(tar_dst, dest_dir, tmp_dir)
+            rescue => e
+              # Rollback the directory if the puppet module had an error
+              begin
+                path.unlink
+              rescue => u
+                debug("Unable to rollback path #{path}: #{u}")
+              end
+              raise Error, "Error downloading module from forge. \nError:\n#{e.message}"
+            end
+          end
+
         end
       end
     end
