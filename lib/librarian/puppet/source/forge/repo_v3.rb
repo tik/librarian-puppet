@@ -77,10 +77,20 @@ module Librarian
             dest_dir = path.join(module_name(name)) 
             tmp_dir = environment.tmp_path.join("forge").to_s
 
-            release = get_release(version)
-            release.download(tar_dst)
-            release.verify(tar_dst)
-            PuppetForge::Unpacker.unpack(tar_dst, dest_dir, tmp_dir)
+            begin
+              release = get_release(version)
+              release.download(tar_dst)
+              release.verify(tar_dst)
+              PuppetForge::Unpacker.unpack(tar_dst, dest_dir, tmp_dir)
+            rescue => e
+              # Rollback the directory if the puppet module had an error
+              begin
+                path.unlink
+              rescue => u
+                debug("Unable to rollback path #{path}: #{u}")
+              end
+              raise Error, "Error downloading module from forge. \nError:\n#{e.message}"
+            end
           end
 
         end
